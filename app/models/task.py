@@ -1,0 +1,63 @@
+import uuid
+from datetime import datetime
+from enum import StrEnum
+
+from sqlalchemy import DateTime, Enum as SAEnum
+from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.db.base import Base
+from app.models.mixins import TimestampMixin
+
+
+class TaskStatus(StrEnum):
+    DRAFT = "draft"
+    PLANNED = "planned"
+    IN_PROGRESS = "in_progress"
+    DONE = "done"
+    CANCELLED = "cancelled"
+
+
+class TaskSource(StrEnum):
+    MANUAL = "manual"
+    VOICE = "voice"
+    EMAIL = "email"
+    IMAGE = "image"
+    CHAT = "chat"
+
+
+class Task(TimestampMixin, Base):
+    __tablename__ = "tasks"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    family_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("families.id", ondelete="CASCADE"), index=True)
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("family_members.id", ondelete="SET NULL"), nullable=True
+    )
+    assignee_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("family_members.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    title: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    status: Mapped[TaskStatus] = mapped_column(
+        SAEnum(
+            TaskStatus,
+            native_enum=False,
+            create_constraint=True,
+            values_callable=lambda statuses: [task_status.value for task_status in statuses],
+        ),
+        default=TaskStatus.DRAFT,
+        index=True,
+    )
+    source: Mapped[TaskSource] = mapped_column(
+        SAEnum(
+            TaskSource,
+            native_enum=False,
+            create_constraint=True,
+            values_callable=lambda sources: [source.value for source in sources],
+        ),
+        default=TaskSource.MANUAL,
+    )
+    priority: Mapped[int] = mapped_column(default=3)
